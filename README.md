@@ -216,7 +216,7 @@ src/main/java/
 │   ├── Trackpoint.java              ← Σημείο GPS (timestamp, HR, κτλ.)
 │   ├── Track.java                   ← Λίστα Trackpoints
 │   ├── Lap.java                     ← Γύρος (περιέχει Tracks)
-│   ├── Activity.java                ← Αφηρημένη βάση δραστηριότητας
+│   ├── Activity.java                
 │   ├── RunningActivity.java         ← Τρέξιμο
 │   ├── CyclingActivity.java         ← Ποδήλατο
 │   ├── WalkingActivity.java         ← Περπάτημα
@@ -251,10 +251,6 @@ src/main/java/
 
 ---
 
-## Βιβλιογραφία
-
-- Keytel LR et al. (2005). *Prediction of energy expenditure from heart rate monitoring during submaximal exercise*. Journal of Sports Sciences.
-- Uth N et al. (2004). *Estimation of VO2max from the ratio between HRmax and HRrest*. European Journal of Applied Physiology.
 
 ---
 
