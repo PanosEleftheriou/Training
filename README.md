@@ -208,7 +208,7 @@ VO2Max  = 15.3 × (MHR / RHR)
 ## Δομή Κώδικα
 
 ```
-src/main/java/gr/harokopio/fitness/
+src/main/java/
 │
 ├── Main.java                        ← Σημείο εισόδου (κονσόλα + GUI)
 │
