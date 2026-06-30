@@ -133,7 +133,4 @@ src/main/java/
 
 https://github.com/firefly-cpp/tcx-test-files
 
-## Βιβλιογραφία
 
-- Keytel LR et al. (2005). Prediction of energy expenditure from heart rate monitoring during submaximal exercise. Journal of Sports Sciences.
-- Uth N et al. (2004). Estimation of VO2max from the ratio between HRmax and HRrest. European Journal of Applied Physiology.
