@@ -86,7 +86,7 @@ public class Lap {
      */
     public double getAverageHeartRate() {
         List<Trackpoint> all = getAllTrackpoints();
-        List<Trackpoint> withHR = all.stream().filter(Trackpoint::hasHeartRate).toList();
+        List<Trackpoint> withHR = all.stream().filter(Trackpoint::hasHeartRate).collect(java.util.stream.Collectors.toList());
         if (withHR.isEmpty()) return 0;
         return withHR.stream().mapToInt(Trackpoint::getHeartRateBpm).average().orElse(0);
     }

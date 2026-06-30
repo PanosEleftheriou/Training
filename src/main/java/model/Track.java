@@ -75,7 +75,7 @@ public class Track {
     public double getAverageHeartRate() {
         List<Trackpoint> withHR = trackpoints.stream()
                 .filter(Trackpoint::hasHeartRate)
-                .toList();
+                .collect(java.util.stream.Collectors.toList());
         if (withHR.isEmpty()) return 0;
         return withHR.stream().mapToInt(Trackpoint::getHeartRateBpm).average().orElse(0);
     }

@@ -5,571 +5,388 @@ import model.*;
 import parser.TcxParser;
 import stats.ActivityStats;
 import vo2max.VO2MaxEstimator;
-import javafx.application.Application;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
-import javafx.geometry.Insets;
-import javafx.geometry.Pos;
-import javafx.scene.Scene;
-import javafx.scene.chart.BarChart;
-import javafx.scene.chart.CategoryAxis;
-import javafx.scene.chart.NumberAxis;
-import javafx.scene.chart.XYChart;
-import javafx.scene.control.*;
-import javafx.scene.layout.*;
-import javafx.stage.FileChooser;
-import javafx.stage.Stage;
 
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import java.awt.*;
+import java.awt.event.*;
 import java.io.File;
 import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.List;
 
-/**
- * Κεντρική κλάση της JavaFX εφαρμογής "Βοηθός Προπόνησης".
- *
- * <p>Η εφαρμογή διαρθρώνεται σε 4 tabs:</p>
- * <ol>
- *   <li><b>Δραστηριότητες</b> – Φόρτωση αρχείων TCX και εμφάνιση στατιστικών</li>
- *   <li><b>Προσθήκη</b> – Χειροκίνητη προσθήκη νέας δραστηριότητας</li>
- *   <li><b>Προφίλ</b> – Εισαγωγή προσωπικών δεδομένων και ημερήσιου στόχου</li>
- *   <li><b>VO2 Max</b> – Εκτίμηση αερόβιας ικανότητας (Προαιρετικό 2)</li>
- * </ol>
- */
-public class FitnessApp extends Application {
+/** Κεντρική κλάση της Swing εφαρμογής "Βοηθός Προπόνησης". */
+public class FitnessApp extends JFrame {
 
-    // --- Κεντρική κατάσταση εφαρμογής ---
-    private final List<Activity> allActivities = new ArrayList<>();
+    private final List<Activity> allActivities = new ArrayList<Activity>();
     private final UserProfile userProfile = new UserProfile();
     private CalorieCalculator currentCalculator = new SimpleCalorieCalculator();
 
-    // --- UI Components ---
-    private TextArea statsArea;
-    private Label statusLabel;
-    private Label vo2ResultLabel;
-    private Label vo2RatingLabel;
-    private Label dailyGoalLabel;
+    private JTextArea statsArea;
+    private JLabel statusLabel;
+    private JLabel vo2ResultLabel;
+    private JLabel vo2RatingLabel;
+    private JLabel dailyGoalLabel;
 
-    @Override
-    public void start(Stage primaryStage) {
-        primaryStage.setTitle("Βοηθός Προπόνησης – Χαροκόπειο Πανεπιστήμιο");
-        primaryStage.setMinWidth(800);
-        primaryStage.setMinHeight(600);
+    public FitnessApp() {
+        setTitle("Βοηθός Προπόνησης – Χαροκόπειο Πανεπιστήμιο");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setMinimumSize(new Dimension(850, 600));
 
-        TabPane tabPane = new TabPane();
-        tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.addTab("Δραστηριότητες", buildActivitiesPanel());
+        tabs.addTab("Προσθήκη",       buildAddPanel());
+        tabs.addTab("Προφίλ",         buildProfilePanel());
+        tabs.addTab("VO2 Max",        buildVO2MaxPanel());
 
-        tabPane.getTabs().addAll(
-            buildActivitiesTab(),
-            buildAddActivityTab(),
-            buildProfileTab(),
-            buildVO2MaxTab()
-        );
+        statusLabel = new JLabel("Έτοιμο – Φορτώστε αρχεία TCX για να ξεκινήσετε.");
+        statusLabel.setBorder(new EmptyBorder(4, 8, 4, 8));
 
-        statusLabel = new Label("Έτοιμο – Φορτώστε αρχεία TCX για να ξεκινήσετε.");
-        statusLabel.setPadding(new Insets(4, 8, 4, 8));
+        add(tabs, BorderLayout.CENTER);
+        add(statusLabel, BorderLayout.SOUTH);
 
-        BorderPane root = new BorderPane();
-        root.setCenter(tabPane);
-        root.setBottom(statusLabel);
-
-        primaryStage.setScene(new Scene(root, 900, 650));
-        primaryStage.show();
+        pack();
+        setLocationRelativeTo(null);
     }
 
-    // =========================================================================
-    // Tab 1: Δραστηριότητες
-    // =========================================================================
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                new FitnessApp().setVisible(true);
+            }
+        });
+    }
 
-    /**
-     * Δημιουργεί το tab φόρτωσης αρχείων και εμφάνισης στατιστικών.
-     */
-    private Tab buildActivitiesTab() {
-        Tab tab = new Tab("📊 Δραστηριότητες");
+    // ── Tab 1: Δραστηριότητες ────────────────────────────────────────────────
 
-        // Επιλογή μεθόδου θερμίδων
-        Label calcLabel = new Label("Μέθοδος θερμίδων:");
-        ComboBox<String> calcCombo = new ComboBox<>();
-        calcCombo.getItems().addAll(
-            "Απλός (MET)",
-            "Καρδιακοί παλμοί",
-            "VO2 Max"
-        );
-        calcCombo.getSelectionModel().selectFirst();
-        calcCombo.setOnAction(e -> {
-            int idx = calcCombo.getSelectionModel().getSelectedIndex();
-            currentCalculator = switch (idx) {
-                case 1  -> new HRCalorieCalculator();
-                case 2  -> new VO2MaxCalorieCalculator();
-                default -> new SimpleCalorieCalculator();
-            };
-            refreshStats();
+    private JPanel buildActivitiesPanel() {
+        JPanel panel = new JPanel(new BorderLayout(5, 5));
+        panel.setBorder(new EmptyBorder(8, 8, 8, 8));
+
+        // Toolbar
+        JButton loadBtn  = new JButton("Φόρτωση TCX...");
+        JButton clearBtn = new JButton("Εκκαθάριση");
+        JLabel calcLabel = new JLabel("Μέθοδος θερμίδων:");
+        String[] methods = {"Απλός (MET)", "Καρδιακοί παλμοί", "VO2 Max"};
+        JComboBox<String> calcCombo = new JComboBox<String>(methods);
+
+        loadBtn.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) { loadTcxFiles(); }
+        });
+        clearBtn.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) { allActivities.clear(); refreshStats(); }
+        });
+        calcCombo.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                int idx = calcCombo.getSelectedIndex();
+                if (idx == 1)      currentCalculator = new HRCalorieCalculator();
+                else if (idx == 2) currentCalculator = new VO2MaxCalorieCalculator();
+                else               currentCalculator = new SimpleCalorieCalculator();
+                refreshStats();
+            }
         });
 
-        // Κουμπιά φόρτωσης
-        Button loadBtn = new Button("📂 Φόρτωση TCX...");
-        loadBtn.setOnAction(e -> loadTcxFiles(loadBtn.getScene().getWindow()));
+        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        toolbar.add(loadBtn); toolbar.add(clearBtn);
+        toolbar.add(calcLabel); toolbar.add(calcCombo);
 
-        Button clearBtn = new Button("🗑 Εκκαθάριση");
-        clearBtn.setOnAction(e -> {
-            allActivities.clear();
-            refreshStats();
-        });
-
-        HBox toolbar = new HBox(10, loadBtn, clearBtn, calcLabel, calcCombo);
-        toolbar.setPadding(new Insets(8));
-        toolbar.setAlignment(Pos.CENTER_LEFT);
-
-        // Περιοχή εμφάνισης στατιστικών
-        statsArea = new TextArea();
+        statsArea = new JTextArea();
         statsArea.setEditable(false);
-        statsArea.setFont(javafx.scene.text.Font.font("Monospaced", 13));
-        statsArea.setPromptText("Φορτώστε αρχεία TCX για να δείτε τα στατιστικά εδώ...");
+        statsArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
 
-        // Ημερήσιος στόχος θερμίδων
-        dailyGoalLabel = new Label("(Ορίστε ημερήσιο στόχο θερμίδων στο tab Προφίλ)");
-        dailyGoalLabel.setPadding(new Insets(4, 8, 4, 8));
-        dailyGoalLabel.setStyle("-fx-text-fill: #555;");
+        dailyGoalLabel = new JLabel("(Ορίστε ημερήσιο στόχο θερμίδων στο tab Προφίλ)");
+        dailyGoalLabel.setBorder(new EmptyBorder(4, 4, 4, 4));
 
-        VBox content = new VBox(toolbar, new Separator(), statsArea, dailyGoalLabel);
-        VBox.setVgrow(statsArea, Priority.ALWAYS);
-        content.setPadding(new Insets(4));
-        tab.setContent(content);
-
-        return tab;
+        panel.add(toolbar, BorderLayout.NORTH);
+        panel.add(new JScrollPane(statsArea), BorderLayout.CENTER);
+        panel.add(dailyGoalLabel, BorderLayout.SOUTH);
+        return panel;
     }
 
-    /**
-     * Ανοίγει FileChooser για επιλογή αρχείων TCX και τα φορτώνει.
-     *
-     * @param owner το παράθυρο που θα ανήκει ο dialog
-     */
-    private void loadTcxFiles(javafx.stage.Window owner) {
-        FileChooser chooser = new FileChooser();
-        chooser.setTitle("Επιλογή αρχείων TCX");
-        chooser.getExtensionFilters().add(
-            new FileChooser.ExtensionFilter("Αρχεία TCX", "*.tcx")
-        );
-
-        List<File> files = chooser.showOpenMultipleDialog(owner);
-        if (files == null || files.isEmpty()) return;
+    private void loadTcxFiles() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setMultiSelectionEnabled(true);
+        chooser.setDialogTitle("Επιλογή αρχείων TCX");
+        chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Αρχεία TCX", "tcx"));
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
 
         TcxParser parser = new TcxParser();
         int loaded = 0;
-        for (File file : files) {
+        for (File file : chooser.getSelectedFiles()) {
             try {
                 List<Activity> activities = parser.parse(file);
                 allActivities.addAll(activities);
                 loaded += activities.size();
             } catch (Exception e) {
-                showAlert("Σφάλμα", "Αδυναμία ανάγνωσης: " + file.getName() + "\n" + e.getMessage());
+                JOptionPane.showMessageDialog(this, "Σφάλμα: " + file.getName() + "\n" + e.getMessage(), "Σφάλμα", JOptionPane.ERROR_MESSAGE);
             }
         }
-
-        setStatus("Φορτώθηκαν " + loaded + " δραστηριότητες από " + files.size() + " αρχεία.");
+        setStatus("Φορτώθηκαν " + loaded + " δραστηριότητες.");
         refreshStats();
     }
 
-    /**
-     * Ανανεώνει την περιοχή στατιστικών με τις τρέχουσες δραστηριότητες.
-     */
     private void refreshStats() {
         if (allActivities.isEmpty()) {
             statsArea.setText("Δεν υπάρχουν φορτωμένες δραστηριότητες.");
             updateDailyGoalLabel();
             return;
         }
-
         StringBuilder sb = new StringBuilder();
-        sb.append("=".repeat(50)).append("\n");
+        sb.append("==================================================\n");
         sb.append(" ΣΤΑΤΙΣΤΙΚΑ ΔΡΑΣΤΗΡΙΟΤΗΤΩΝ\n");
-        sb.append("=".repeat(50)).append("\n\n");
+        sb.append("==================================================\n\n");
 
         double totalCalories = 0;
         for (Activity activity : allActivities) {
             ActivityStats stats = new ActivityStats(activity, userProfile, currentCalculator);
             sb.append(stats.format());
-            sb.append("-".repeat(40)).append("\n");
+            sb.append("----------------------------------------\n");
             double cal = stats.getCalories();
             if (cal >= 0) totalCalories += cal;
         }
-
-        // Σύνολα αν υπάρχουν πολλές δραστηριότητες
         if (allActivities.size() > 1) {
-            sb.append("\n").append("=".repeat(50)).append("\n");
+            long totalSec = 0; double totalKm = 0;
+            for (Activity a : allActivities) {
+                totalSec += a.getTotalDurationSeconds();
+                totalKm  += a.getTotalDistanceMeters() / 1000.0;
+            }
+            sb.append("\n==================================================\n");
             sb.append("ΣΥΝΟΛΑ\n");
-            sb.append("=".repeat(50)).append("\n");
-            long totalSec = allActivities.stream().mapToLong(Activity::getTotalDurationSeconds).sum();
-            double totalKm = allActivities.stream().mapToDouble(Activity::getTotalDistanceMeters).sum() / 1000.0;
+            sb.append("==================================================\n");
             sb.append("Συνολικός χρόνος: ").append(ActivityStats.formatDuration(totalSec)).append("\n");
             sb.append(String.format("Συνολική απόσταση: %.2f km%n", totalKm));
-            if (totalCalories > 0) {
-                sb.append(String.format("Συνολικές θερμίδες: %.0f kcal%n", totalCalories));
-            }
+            if (totalCalories > 0) sb.append(String.format("Συνολικές θερμίδες: %.0f kcal%n", totalCalories));
         }
-
         statsArea.setText(sb.toString());
+        statsArea.setCaretPosition(0);
         updateDailyGoalLabel();
     }
 
-    /**
-     * Ενημερώνει το label ημερήσιου στόχου θερμίδων.
-     * Ομαδοποιεί τις δραστηριότητες ανά ημέρα και συγκρίνει με τον στόχο.
-     */
     private void updateDailyGoalLabel() {
         double goal = userProfile.getDailyCalorieGoal();
         if (goal <= 0 || allActivities.isEmpty()) {
             dailyGoalLabel.setText("(Ορίστε ημερήσιο στόχο θερμίδων στο tab Προφίλ)");
-            dailyGoalLabel.setStyle("-fx-text-fill: #555;");
             return;
         }
-
-        // Ομαδοποίηση θερμίδων ανά ημέρα
-        Map<LocalDate, Double> dailyCals = new TreeMap<>();
+        Map<LocalDate, Double> dailyCals = new TreeMap<LocalDate, Double>();
         for (Activity a : allActivities) {
             ZonedDateTime start = a.getStartTime();
             if (start == null) continue;
             LocalDate day = start.toLocalDate();
             double cal = currentCalculator.calculate(a, userProfile);
             if (cal >= 0) {
-                dailyCals.merge(day, cal, Double::sum);
+                Double existing = dailyCals.get(day);
+                dailyCals.put(day, existing == null ? cal : existing + cal);
             }
         }
-
-        if (dailyCals.isEmpty()) {
-            dailyGoalLabel.setText("Δεν υπάρχουν θερμίδες για ανάλυση στόχου.");
-            return;
-        }
-
-        StringBuilder sb = new StringBuilder("Ημερήσιος Στόχος: " + (int) goal + " kcal  |  ");
+        StringBuilder sb = new StringBuilder("Στόχος: " + (int) goal + " kcal  |  ");
         for (Map.Entry<LocalDate, Double> entry : dailyCals.entrySet()) {
             double cal = entry.getValue();
             String status = cal >= goal ? "✅" : "❌";
-            double remaining = goal - cal;
-            sb.append(entry.getKey()).append(": ").append((int) cal).append(" kcal ")
-              .append(status);
-            if (remaining > 0) sb.append(" (απομένουν ").append((int) remaining).append(" kcal)");
-            sb.append("  |  ");
+            double rem = goal - cal;
+            sb.append(entry.getKey()).append(": ").append((int) cal).append(" kcal ").append(status);
+            if (rem > 0) sb.append(" (απομένουν ").append((int) rem).append(")");
+            sb.append("  ");
         }
         dailyGoalLabel.setText(sb.toString());
-        dailyGoalLabel.setStyle("-fx-text-fill: #1a1a1a; -fx-font-weight: bold;");
     }
 
-    // =========================================================================
-    // Tab 2: Προσθήκη Δραστηριότητας
-    // =========================================================================
+    // ── Tab 2: Προσθήκη ──────────────────────────────────────────────────────
 
-    /**
-     * Δημιουργεί το tab χειροκίνητης εισαγωγής νέας δραστηριότητας.
-     */
-    private Tab buildAddActivityTab() {
-        Tab tab = new Tab("➕ Προσθήκη");
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(12);
-        grid.setPadding(new Insets(20));
+    private JPanel buildAddPanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(6, 6, 6, 6);
+        c.anchor = GridBagConstraints.WEST;
 
-        // Τύπος δραστηριότητας
-        Label typeLabel = new Label("Τύπος:");
-        ComboBox<String> typeCombo = new ComboBox<>();
-        typeCombo.getItems().addAll("Running", "Biking", "Walking", "Swimming");
-        typeCombo.getSelectionModel().selectFirst();
+        String[] sports = {"Running", "Biking", "Walking", "Swimming"};
+        JComboBox<String> typeCombo = new JComboBox<String>(sports);
+        JTextField durField  = new JTextField("30", 10);
+        JTextField distField = new JTextField("5.0", 10);
+        JTextField hrField   = new JTextField("0", 10);
+        JButton addBtn = new JButton("Προσθήκη δραστηριότητας");
+        addBtn.setBackground(new Color(76, 175, 80));
+        addBtn.setForeground(Color.WHITE);
 
-        // Διάρκεια
-        Label durLabel = new Label("Διάρκεια (λεπτά):");
-        TextField durField = new TextField("30");
-
-        // Απόσταση
-        Label distLabel = new Label("Απόσταση (km):");
-        TextField distField = new TextField("5.0");
-
-        // Μέσοι παλμοί
-        Label hrLabel = new Label("Μέσοι παλμοί (bpm):");
-        TextField hrField = new TextField("0");
-
-        // Κουμπί προσθήκης
-        Button addBtn = new Button("➕ Προσθήκη δραστηριότητας");
-        addBtn.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-font-size: 13px;");
-        addBtn.setOnAction(e -> {
-            try {
-                String sport    = typeCombo.getValue();
-                double durMin   = Double.parseDouble(durField.getText());
-                double distKm   = Double.parseDouble(distField.getText());
-                int    avgHr    = Integer.parseInt(hrField.getText());
-
-                Activity activity = createManualActivity(sport, durMin, distKm, avgHr);
-                allActivities.add(activity);
-                setStatus("Προστέθηκε: " + sport + " – " + (int) durMin + " λεπτά");
-                refreshStats();
-            } catch (NumberFormatException ex) {
-                showAlert("Σφάλμα", "Ελέγξτε τις αριθμητικές τιμές που εισάγατε.");
+        addBtn.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                try {
+                    String sport  = (String) typeCombo.getSelectedItem();
+                    double durMin = Double.parseDouble(durField.getText());
+                    double distKm = Double.parseDouble(distField.getText());
+                    int    avgHr  = Integer.parseInt(hrField.getText());
+                    allActivities.add(createManualActivity(sport, durMin, distKm, avgHr));
+                    setStatus("Προστέθηκε: " + sport + " – " + (int) durMin + " λεπτά");
+                    refreshStats();
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(panel, "Ελέγξτε τις αριθμητικές τιμές.", "Σφάλμα", JOptionPane.ERROR_MESSAGE);
+                }
             }
         });
 
-        grid.add(typeLabel, 0, 0);  grid.add(typeCombo,  1, 0);
-        grid.add(durLabel,  0, 1);  grid.add(durField,   1, 1);
-        grid.add(distLabel, 0, 2);  grid.add(distField,  1, 2);
-        grid.add(hrLabel,   0, 3);  grid.add(hrField,    1, 3);
-        grid.add(addBtn,    0, 4, 2, 1);
-
-        tab.setContent(grid);
-        return tab;
+        c.gridx=0; c.gridy=0; panel.add(new JLabel("Τύπος:"), c);
+        c.gridx=1; panel.add(typeCombo, c);
+        c.gridx=0; c.gridy=1; panel.add(new JLabel("Διάρκεια (λεπτά):"), c);
+        c.gridx=1; panel.add(durField, c);
+        c.gridx=0; c.gridy=2; panel.add(new JLabel("Απόσταση (km):"), c);
+        c.gridx=1; panel.add(distField, c);
+        c.gridx=0; c.gridy=3; panel.add(new JLabel("Μέσοι παλμοί (bpm):"), c);
+        c.gridx=1; panel.add(hrField, c);
+        c.gridx=0; c.gridy=4; c.gridwidth=2; panel.add(addBtn, c);
+        return panel;
     }
 
-    /**
-     * Δημιουργεί χειροκίνητα μια δραστηριότητα από τα δεδομένα του χρήστη.
-     * Κατασκευάζει ένα συνθετικό Track με δύο trackpoints για τον υπολογισμό
-     * χρόνου και απόστασης.
-     *
-     * @param sport   ο τύπος άθλησης
-     * @param durMin  η διάρκεια σε λεπτά
-     * @param distKm  η απόσταση σε km
-     * @param avgHr   ο μέσος καρδιακός παλμός
-     * @return το δημιουργημένο Activity
-     */
     private Activity createManualActivity(String sport, double durMin, double distKm, int avgHr) {
         ZonedDateTime now = ZonedDateTime.now();
-        Activity activity = switch (sport.toLowerCase()) {
-            case "biking"  -> new CyclingActivity(now);
-            case "walking" -> new WalkingActivity(now);
-            case "swimming" -> new SwimmingActivity(now);
-            default        -> new RunningActivity(now);
-        };
+        Activity activity;
+        String s = sport.toLowerCase();
+        if (s.equals("biking"))        activity = new CyclingActivity(now);
+        else if (s.equals("walking"))  activity = new WalkingActivity(now);
+        else if (s.equals("swimming")) activity = new SwimmingActivity(now);
+        else                           activity = new RunningActivity(now);
         activity.setSport(sport);
-
-        // Δημιουργία συνθετικού Lap → Track → 2 Trackpoints
         Lap lap = new Lap(now);
         Track track = new Track();
-
         Trackpoint start = new Trackpoint();
-        start.setTimestamp(now);
-        start.setDistanceMeters(0.0);
+        start.setTimestamp(now); start.setDistanceMeters(0.0);
         if (avgHr > 0) start.setHeartRateBpm(avgHr);
-
         Trackpoint end = new Trackpoint();
         end.setTimestamp(now.plusSeconds((long)(durMin * 60)));
         end.setDistanceMeters(distKm * 1000.0);
         if (avgHr > 0) end.setHeartRateBpm(avgHr);
-
-        track.addTrackpoint(start);
-        track.addTrackpoint(end);
-        lap.addTrack(track);
-        activity.addLap(lap);
-
+        track.addTrackpoint(start); track.addTrackpoint(end);
+        lap.addTrack(track); activity.addLap(lap);
         return activity;
     }
 
-    // =========================================================================
-    // Tab 3: Προφίλ Χρήστη
-    // =========================================================================
+    // ── Tab 3: Προφίλ ────────────────────────────────────────────────────────
 
-    /**
-     * Δημιουργεί το tab εισαγωγής προσωπικών δεδομένων χρήστη.
-     */
-    private Tab buildProfileTab() {
-        Tab tab = new Tab("👤 Προφίλ");
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(12);
-        grid.setPadding(new Insets(20));
+    private JPanel buildProfilePanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(6, 6, 6, 6);
+        c.anchor = GridBagConstraints.WEST;
 
-        // Φύλο
-        Label genderLbl = new Label("Φύλο:");
-        ToggleGroup genderGroup = new ToggleGroup();
-        RadioButton maleRb  = new RadioButton("Άνδρας");
-        RadioButton femaleRb = new RadioButton("Γυναίκα");
-        maleRb.setToggleGroup(genderGroup);
-        femaleRb.setToggleGroup(genderGroup);
-        maleRb.setSelected(true);
-        HBox genderBox = new HBox(15, maleRb, femaleRb);
+        JRadioButton maleRb   = new JRadioButton("Άνδρας", true);
+        JRadioButton femaleRb = new JRadioButton("Γυναίκα");
+        ButtonGroup bg = new ButtonGroup();
+        bg.add(maleRb); bg.add(femaleRb);
+        JPanel genderPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        genderPanel.add(maleRb); genderPanel.add(femaleRb);
 
-        // Ηλικία
-        Label ageLbl = new Label("Ηλικία (χρόνια):");
-        TextField ageField = new TextField(String.valueOf(userProfile.getAge()));
+        JTextField ageField    = new JTextField(String.valueOf(userProfile.getAge()), 10);
+        JTextField weightField = new JTextField(String.valueOf(userProfile.getWeightKg()), 10);
+        JTextField rhrField    = new JTextField(String.valueOf(userProfile.getRestingHeartRate()), 10);
+        JTextField goalField   = new JTextField("0", 10);
+        JButton saveBtn = new JButton("Αποθήκευση προφίλ");
+        saveBtn.setBackground(new Color(33, 150, 243));
+        saveBtn.setForeground(Color.WHITE);
 
-        // Βάρος
-        Label weightLbl = new Label("Βάρος (kg):");
-        TextField weightField = new TextField(String.valueOf(userProfile.getWeightKg()));
-
-        // Παλμοί ηρεμίας
-        Label rhrLbl = new Label("Παλμοί ηρεμίας (bpm):");
-        TextField rhrField = new TextField(String.valueOf(userProfile.getRestingHeartRate()));
-
-        // Ημερήσιος στόχος θερμίδων
-        Label goalLbl = new Label("Ημερήσιος στόχος θερμίδων (kcal, 0 = χωρίς στόχο):");
-        TextField goalField = new TextField("0");
-
-        // Κουμπί αποθήκευσης
-        Button saveBtn = new Button("💾 Αποθήκευση προφίλ");
-        saveBtn.setStyle("-fx-background-color: #2196F3; -fx-text-fill: white; -fx-font-size: 13px;");
-        saveBtn.setOnAction(e -> {
-            try {
-                userProfile.setGender(femaleRb.isSelected()
-                        ? UserProfile.Gender.FEMALE
-                        : UserProfile.Gender.MALE);
-                userProfile.setAge(Integer.parseInt(ageField.getText()));
-                userProfile.setWeightKg(Double.parseDouble(weightField.getText()));
-                userProfile.setRestingHeartRate(Integer.parseInt(rhrField.getText()));
-                userProfile.setDailyCalorieGoal(Double.parseDouble(goalField.getText()));
-                setStatus("Το προφίλ αποθηκεύτηκε επιτυχώς.");
-                refreshStats();
-            } catch (NumberFormatException ex) {
-                showAlert("Σφάλμα", "Ελέγξτε τις αριθμητικές τιμές.");
+        saveBtn.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                try {
+                    userProfile.setGender(femaleRb.isSelected() ? UserProfile.Gender.FEMALE : UserProfile.Gender.MALE);
+                    userProfile.setAge(Integer.parseInt(ageField.getText()));
+                    userProfile.setWeightKg(Double.parseDouble(weightField.getText()));
+                    userProfile.setRestingHeartRate(Integer.parseInt(rhrField.getText()));
+                    userProfile.setDailyCalorieGoal(Double.parseDouble(goalField.getText()));
+                    setStatus("Το προφίλ αποθηκεύτηκε.");
+                    refreshStats();
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(panel, "Ελέγξτε τις αριθμητικές τιμές.", "Σφάλμα", JOptionPane.ERROR_MESSAGE);
+                }
             }
         });
 
-        grid.add(genderLbl,  0, 0); grid.add(genderBox, 1, 0);
-        grid.add(ageLbl,     0, 1); grid.add(ageField,  1, 1);
-        grid.add(weightLbl,  0, 2); grid.add(weightField, 1, 2);
-        grid.add(rhrLbl,     0, 3); grid.add(rhrField,  1, 3);
-        grid.add(goalLbl,    0, 4); grid.add(goalField, 1, 4);
-        grid.add(saveBtn,    0, 5, 2, 1);
-
-        tab.setContent(grid);
-        return tab;
+        c.gridx=0; c.gridy=0; panel.add(new JLabel("Φύλο:"), c);
+        c.gridx=1; panel.add(genderPanel, c);
+        c.gridx=0; c.gridy=1; panel.add(new JLabel("Ηλικία (χρόνια):"), c);
+        c.gridx=1; panel.add(ageField, c);
+        c.gridx=0; c.gridy=2; panel.add(new JLabel("Βάρος (kg):"), c);
+        c.gridx=1; panel.add(weightField, c);
+        c.gridx=0; c.gridy=3; panel.add(new JLabel("Παλμοί εν ηρεμία (bpm):"), c);
+        c.gridx=1; panel.add(rhrField, c);
+        c.gridx=0; c.gridy=4; panel.add(new JLabel("Ημερήσιος στόχος (kcal):"), c);
+        c.gridx=1; panel.add(goalField, c);
+        c.gridx=0; c.gridy=5; c.gridwidth=2; panel.add(saveBtn, c);
+        return panel;
     }
 
-    // =========================================================================
-    // Tab 4: VO2 Max (Προαιρετικό μέρος 2)
-    // =========================================================================
+    // ── Tab 4: VO2 Max ───────────────────────────────────────────────────────
 
-    /**
-     * Δημιουργεί το tab εκτίμησης VO2 Max.
-     * Αποτελεί την υλοποίηση του Προαιρετικού Μέρους 2 της εργασίας.
-     */
-    private Tab buildVO2MaxTab() {
-        Tab tab = new Tab("🫀 VO2 Max");
-        VBox vbox = new VBox(15);
-        vbox.setPadding(new Insets(20));
+    private JPanel buildVO2MaxPanel() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
 
-        // Επεξήγηση
-        Label infoLabel = new Label(
-            "Εκτίμηση VO2 Max με τη μέθοδο Uth et al.\n" +
-            "Απαιτεί: ηλικία, φύλο και παλμοί εν ηρεμία από το Προφίλ."
-        );
-        infoLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #444;");
+        JLabel infoLabel = new JLabel("<html><i>Εκτίμηση VO2 Max με τη μέθοδο Uth et al.<br>Απαιτεί: ηλικία, φύλο και παλμοί εν ηρεμία από το Προφίλ.</i></html>");
+        JLabel formulaLabel = new JLabel("Τύπος: VO2Max = 15.3 × (MHR / RHR)   |   MHR = 220 − ηλικία");
+        formulaLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        formulaLabel.setForeground(Color.DARK_GRAY);
 
-        // Αποτελέσματα
-        vo2ResultLabel = new Label("VO2 Max: –");
-        vo2ResultLabel.setStyle("-fx-font-size: 22px; -fx-font-weight: bold;");
+        vo2ResultLabel = new JLabel("VO2 Max: –");
+        vo2ResultLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 22));
 
-        vo2RatingLabel = new Label("Αξιολόγηση: –");
-        vo2RatingLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: #1565C0;");
+        vo2RatingLabel = new JLabel("Αξιολόγηση: –");
+        vo2RatingLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
+        vo2RatingLabel.setForeground(new Color(21, 101, 192));
 
-        Label formulaLabel = new Label(
-            "Τύπος: VO2Max = 15.3 × (MHR / RHR)   |   MHR = 220 − ηλικία"
-        );
-        formulaLabel.setStyle("-fx-font-family: monospace; -fx-text-fill: #555;");
+        JButton calcBtn = new JButton("Υπολόγισε VO2 Max");
+        calcBtn.setBackground(new Color(21, 101, 192));
+        calcBtn.setForeground(Color.WHITE);
+        calcBtn.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
+        calcBtn.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) { calculateVO2Max(); }
+        });
 
-        Button calcBtn = new Button("Υπολόγισε VO2 Max");
-        calcBtn.setStyle("-fx-background-color: #1565C0; -fx-text-fill: white; -fx-font-size: 13px;");
-        calcBtn.setOnAction(e -> calculateVO2Max());
+        JPanel top = new JPanel();
+        top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
+        top.add(infoLabel);
+        top.add(Box.createVerticalStrut(8));
+        top.add(formulaLabel);
+        top.add(Box.createVerticalStrut(12));
+        top.add(calcBtn);
+        top.add(Box.createVerticalStrut(12));
+        top.add(vo2ResultLabel);
+        top.add(Box.createVerticalStrut(6));
+        top.add(vo2RatingLabel);
 
-        // Bar Chart για θερμίδες ανά δραστηριότητα
-        Label chartTitle = new Label("Εκτίμηση θερμίδων βάσει VO2 Max ανά δραστηριότητα:");
-        chartTitle.setStyle("-fx-font-weight: bold;");
-
-        CategoryAxis xAxis = new CategoryAxis();
-        NumberAxis   yAxis = new NumberAxis();
-        yAxis.setLabel("kcal");
-        BarChart<String, Number> barChart = new BarChart<>(xAxis, yAxis);
-        barChart.setTitle("Θερμίδες ανά δραστηριότητα (VO2 Max)");
-        barChart.setLegendVisible(false);
-        barChart.setPrefHeight(250);
-
-        // Αποθηκεύουμε αναφορά για ανανέωση από calculateVO2Max()
-        vo2BarChart = barChart;
-
-        vbox.getChildren().addAll(
-            infoLabel, new Separator(),
-            formulaLabel,
-            calcBtn,
-            vo2ResultLabel,
-            vo2RatingLabel,
-            new Separator(),
-            chartTitle,
-            barChart
-        );
-
-        ScrollPane scroll = new ScrollPane(vbox);
-        scroll.setFitToWidth(true);
-        tab.setContent(scroll);
-        return tab;
+        panel.add(top, BorderLayout.NORTH);
+        return panel;
     }
 
-    /** Αναφορά στο bar chart του tab VO2 Max για ανανέωση */
-    private BarChart<String, Number> vo2BarChart;
-
-    /**
-     * Εκτελεί τον υπολογισμό VO2 Max και ενημερώνει τα labels και το γράφημα.
-     */
     private void calculateVO2Max() {
         VO2MaxEstimator estimator = new VO2MaxEstimator();
         try {
-            double vo2max  = estimator.estimateVO2Max(userProfile);
-            String rating  = estimator.getRating(vo2max, userProfile);
-
+            double vo2max = estimator.estimateVO2Max(userProfile);
+            String rating = estimator.getRating(vo2max, userProfile);
             vo2ResultLabel.setText(String.format("VO2 Max: %.1f ml/kg/min", vo2max));
             vo2RatingLabel.setText("Αξιολόγηση: " + rating);
 
-            // Χρωματισμός αξιολόγησης
-            String color = switch (rating) {
-                case "Άριστο"          -> "#1B5E20";
-                case "Καλό"            -> "#2E7D32";
-                case "Πάνω από Μέσο"  -> "#F57F17";
-                case "Μέσο"            -> "#E65100";
-                default                -> "#B71C1C";
-            };
-            vo2RatingLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: " + color + "; -fx-font-weight: bold;");
+            Color color;
+            if (rating.equals("Άριστο"))              color = new Color(27, 94, 32);
+            else if (rating.equals("Καλό"))            color = new Color(46, 125, 50);
+            else if (rating.equals("Πάνω από Μέσο"))  color = new Color(245, 127, 23);
+            else if (rating.equals("Μέσο"))            color = new Color(230, 81, 0);
+            else                                        color = new Color(183, 28, 28);
+            vo2RatingLabel.setForeground(color);
 
-            // Ενημέρωση bar chart με θερμίδες ανά δραστηριότητα
-            updateVO2BarChart(estimator, vo2max);
             setStatus(String.format("VO2 Max: %.1f ml/kg/min – %s", vo2max, rating));
-
         } catch (IllegalArgumentException e) {
-            showAlert("Σφάλμα", "Ορίστε τους παλμούς ηρεμίας στο tab Προφίλ.");
+            JOptionPane.showMessageDialog(this, "Ορίστε τους παλμούς εν ηρεμία στο tab Προφίλ.", "Σφάλμα", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    /**
-     * Ανανεώνει το bar chart με τις θερμίδες κάθε δραστηριότητας
-     * υπολογισμένες μέσω VO2 Max.
-     *
-     * @param estimator ο υπολογιστής VO2 Max
-     * @param vo2max    η εκτιμώμενη τιμή VO2 Max
-     */
-    private void updateVO2BarChart(VO2MaxEstimator estimator, double vo2max) {
-        vo2BarChart.getData().clear();
-        XYChart.Series<String, Number> series = new XYChart.Series<>();
+    // ── Helpers ──────────────────────────────────────────────────────────────
 
-        int idx = 1;
-        for (Activity a : allActivities) {
-            double durationMin = a.getTotalDurationSeconds() / 60.0;
-            double calories    = estimator.estimateCalories(vo2max, userProfile.getWeightKg(), durationMin);
-            String label       = a.getSport() + " #" + idx++;
-            series.getData().add(new XYChart.Data<>(label, calories));
-        }
+    private void setStatus(String msg) { if (statusLabel != null) statusLabel.setText(msg); }
 
-        if (!series.getData().isEmpty()) {
-            vo2BarChart.getData().add(series);
-        }
-    }
-
-    // =========================================================================
-    // Βοηθητικές μέθοδοι UI
-    // =========================================================================
-
-    /** Ενημερώνει το status bar στο κάτω μέρος του παραθύρου */
-    private void setStatus(String message) {
-        if (statusLabel != null) statusLabel.setText(message);
-    }
-
-    /** Εμφανίζει dialog σφάλματος */
-    private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+    /** Εκκίνηση από κονσόλα ή ως GUI */
+    public static void launch(String[] args) {
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() { new FitnessApp().setVisible(true); }
+        });
     }
 }
